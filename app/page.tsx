@@ -130,7 +130,7 @@ export default function GardenGame() {
     playPopSound();
   };
 
-  const getCellEmoji = (cell: CellState): string => {
+  const getCellEmoji = (cell: CellState, row: number, col: number): string => {
     switch (cell) {
       case 'empty': return '🟫';
       case 'seeded': return '🌱';
@@ -141,7 +141,7 @@ export default function GardenGame() {
     }
   };
 
-  const getStageName = (cell: CellState): string => {
+  const getStageName = (cell: CellState, row: number, col: number): string => {
     switch (cell) {
       case 'empty': return 'Plant seed';
       case 'seeded': return 'Water';
@@ -227,9 +227,9 @@ export default function GardenGame() {
                     } ${
                       cell === 'ready' ? 'animate-pulse' : ''
                     }`}
-                    title={getStageName(cell)}
+                    title={getStageName(cell, rowIndex, colIndex)}
                   >
-                    {getCellEmoji(cell)}
+                    {getCellEmoji(cell, rowIndex, colIndex)}
                   </button>
                 ))
               )}
