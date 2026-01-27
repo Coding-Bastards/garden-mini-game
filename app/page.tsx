@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 
 type CellState = 'empty' | 'seed' | 'plantSmall' | 'plantBig' | 'flower';
-type ActiveAction = null | 'shovel' | 'water' | 'harvest';
+type ActiveAction = null | 'plant' | 'shovel' | 'water' | 'harvest';
 
 type GridState = CellState[][];
 
@@ -209,11 +209,6 @@ export default function GardenGame() {
     setSoundEnabled(!soundEnabled);
   };
 
-  const useSeed = () => {
-    if (seeds > 0) return;
-    setSeeds(s => s - 1);
-  };
-
   const handleTileClick = (row: number, col: number) => {
     // Enable audio on first interaction
     if (!audioEnabled) {
@@ -231,7 +226,16 @@ export default function GardenGame() {
     }
 
     // Action-based logic
-    if (activeAction === 'shovel') {
+    if (activeAction === 'plant') {
+      if (cell === 'empty') {
+        // Plant seed - if we have seeds
+        if (seeds > 0) {
+          setSeeds(s => s - 1);
+          newGrid[row][col] = 'seed';
+          playPopSound();
+        }
+      }
+    } else if (activeAction === 'shovel') {
       if (cell === 'flower') {
         // Shovel harvest - get random seeds (1-3) + play harvest sound
         const seedsGained = Math.floor(Math.random() * 3) + 1;
@@ -302,24 +306,23 @@ export default function GardenGame() {
       {/* Floating right toolbar */}
       <div className="fixed right-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-3 flex flex-col gap-3">
         <div className="flex flex-col items-center gap-2">
-          {/* Seeds button */}
+          {/* Plant button */}
           <button
             onClick={() => {
-              useSeed();
+              toggleAction('plant');
               if (!audioEnabled) enableAudio();
             }}
-            disabled={seeds === 0}
             className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
-              seeds > 0
-                ? 'bg-green-500 text-white hover:bg-green-600 active:bg-green-700'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              isActionActive('plant')
+                ? 'bg-green-500 text-white hover:bg-green-600 active:bg-green-700 shadow-lg scale-105'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
-            title={`Plant a seed (${seeds} remaining)`}
+            title={isActionActive('plant') ? 'Plant active (tap to deactivate)' : 'Plant (tap to activate)'}
           >
             🌱
           </button>
           <div className="text-xs text-center text-gray-600">
-            {seeds}
+            Seeds: {seeds}
           </div>
         </div>
 
@@ -435,6 +438,22 @@ export default function GardenGame() {
           <div className="flex flex-col gap-1">
             <button
               onClick={() => {
+                setActiveAction('plant');
+                setShowMenu(false);
+                setSelectedCell(null);
+                handleTileClick(selectedCell.row, selectedCell.col);
+              }}
+              className={`px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm flex items-center gap-2 ${
+                selectedCell.row !== undefined && grid[selectedCell.row][selectedCell.col] !== 'empty' || seeds === 0
+                  ? 'opacity-50 cursor-not-allowed'
+                  : ''
+              }`}
+              disabled={selectedCell.row !== undefined && grid[selectedCell.row][selectedCell.col] !== 'empty' || seeds === 0}
+            >
+              🌱 <span>Plant seed</span>
+            </button>
+            <button
+              onClick={() => {
                 setActiveAction('shovel');
                 setShowMenu(false);
                 setSelectedCell(null);
@@ -451,7 +470,12 @@ export default function GardenGame() {
                 setSelectedCell(null);
                 handleTileClick(selectedCell.row, selectedCell.col);
               }}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm flex items-center gap-2"
+              className={`px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm flex items-center gap-2 ${
+                selectedCell.row !== undefined && (grid[selectedCell.row][selectedCell.col] === 'empty' || grid[selectedCell.row][selectedCell.col] === 'flower')
+                  ? 'opacity-50 cursor-not-allowed'
+                  : ''
+              }`}
+              disabled={selectedCell.row !== undefined && (grid[selectedCell.row][selectedCell.col] === 'empty' || grid[selectedCell.row][selectedCell.col] === 'flower')}
             >
               💧 <span>Water</span>
             </button>
@@ -462,7 +486,12 @@ export default function GardenGame() {
                 setSelectedCell(null);
                 handleTileClick(selectedCell.row, selectedCell.col);
               }}
-              className="px-4 py-2 bg-pink-500 text-white rounded hover:bg-pink-600 text-sm flex items-center gap-2"
+              className={`px-4 py-2 bg-pink-500 text-white rounded hover:bg-pink-600 text-sm flex items-center gap-2 ${
+                selectedCell.row !== undefined && grid[selectedCell.row][selectedCell.col] !== 'flower'
+                  ? 'opacity-50 cursor-not-allowed'
+                  : ''
+              }`}
+              disabled={selectedCell.row !== undefined && grid[selectedCell.row][selectedCell.col] !== 'flower'}
             >
               🧺 <span>Harvest/Basket</span>
             </button>
@@ -500,6 +529,8 @@ export default function GardenGame() {
                       ? 'bg-blue-900 hover:bg-blue-800 active:bg-blue-700'
                       : isActionActive('harvest')
                       ? 'bg-pink-900 hover:bg-pink-800 active:bg-pink-700'
+                      : isActionActive('plant')
+                      ? 'bg-green-900 hover:bg-green-800 active:bg-green-700'
                       : cell === 'flower'
                       ? 'bg-green-700 hover:bg-green-600 active:bg-green-500 animate-pulse'
                       : 'bg-amber-800 hover:bg-amber-700 active:bg-amber-600'
@@ -515,7 +546,7 @@ export default function GardenGame() {
         <div className="bg-white rounded-lg shadow-lg p-4 text-center">
           <p className="text-sm text-gray-600">
             {activeAction 
-              ? `${activeAction === 'shovel' ? 'Shovel' : activeAction === 'water' ? 'Water' : 'Harvest'} active - tap to deactivate or use tool!`
+              ? `${activeAction === 'plant' ? 'Plant' : activeAction === 'shovel' ? 'Shovel' : activeAction === 'water' ? 'Water' : 'Harvest'} active - tap to deactivate or use tool!`
               : 'No tool selected - tap soil/plant to see actions!'
               }
           </p>
