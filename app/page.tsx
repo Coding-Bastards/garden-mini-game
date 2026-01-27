@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-type CellState = 'empty' | 'seeded' | 'watered' | 'growing' | 'ready';
+type CellState = 'empty' | 'seed' | 'plantSmall' | 'plantBig' | 'flower';
+type Tool = null | 'seeds';
 
 type GridState = CellState[][];
-
-type Tool = 'shovel' | 'seeds';
 
 // Flower options for random selection
 const FLOWERS = ['🌻', '🌺', '🌸', '🌼'];
@@ -17,49 +16,59 @@ export default function GardenGame() {
     Array(6).fill(null).map(() => Array(6).fill('empty'))
   );
   const [score, setScore] = useState(0);
-  const [selectedTool, setSelectedTool] = useState<Tool>('seeds');
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [seeds, setSeeds] = useState(3);
+  const [shovelActive, setShovelActive] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
-  const [flowerGrid, setFlowerGrid] = useState<string[][]>([]);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [selectedCell, setSelectedCell] = useState<{row: number, col: number} | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
   
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
   const popAudioRef = useRef<HTMLAudioElement | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // Initialize flower grid with random flower selection
+  // Click outside to close menu
   useEffect(() => {
-    const flowers = Array(6).fill(null).map(() => 
-      Array(6).fill(null).map(() => 
-        FLOWERS[Math.floor(Math.random() * FLOWERS.length)]
-      )
-    );
-    setFlowerGrid(flowers);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+        setSelectedCell(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   // Play pop sound
   const playPopSound = () => {
     if (!soundEnabled || !audioEnabled) return;
-    if (popAudioRef.current) {
-      popAudioRef.current.currentTime = 0;
-      popAudioRef.current.play();
-    }
+    
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1);
+    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.1);
   };
 
   // Background ambient sound
   useEffect(() => {
-    if (!soundEnabled || !audioEnabled) {
-      if (backgroundAudioRef.current) {
-        backgroundAudioRef.current.pause();
-      }
-      return;
-    }
+    if (!soundEnabled || !audioEnabled) return;
 
-    // Create a simple relaxing tone using Web Audio API
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     const gainNode = audioContext.createGain();
     gainNode.connect(audioContext.destination);
-    gainNode.gain.setValueAtTime(0.02, audioContext.currentTime); // Very quiet
+    gainNode.gain.setValueAtTime(0.01, audioContext.currentTime); 
 
-    // Create a gentle ambient tone (like a soft wind chime)
     const createTone = () => {
       const oscillator = audioContext.createOscillator();
       oscillator.type = 'sine';
@@ -68,7 +77,7 @@ export default function GardenGame() {
       
       const gainNode = audioContext.createGain();
       gainNode.connect(audioContext.destination);
-      gainNode.gain.setValueAtTime(0.01, audioContext.currentTime);
+      gainNode.gain.setValueAtTime(0.005, audioContext.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 2);
       
       oscillator.connect(gainNode);
@@ -88,7 +97,23 @@ export default function GardenGame() {
     setAudioEnabled(true);
   };
 
-  const handleClick = (row: number, col: number) => {
+  const toggleShovel = () => {
+    setShovelActive(!shovelActive);
+  };
+
+  const toggleAudio = () => {
+    if (!audioEnabled) {
+      enableAudio();
+    }
+    setSoundEnabled(!soundEnabled);
+  };
+
+  const useSeed = () => {
+    if (seeds > 0) return;
+    setSeeds(s => s - 1);
+  };
+
+  const handleTileClick = (row: number, col: number) => {
     // Enable audio on first interaction
     if (!audioEnabled) {
       enableAudio();
@@ -97,62 +122,77 @@ export default function GardenGame() {
     const cell = grid[row][col];
     const newGrid = [...grid.map(r => [...r])];
 
-    if (selectedTool === 'shovel') {
-      // Shovel clears any tile back to empty (harvests flower or clears tile)
-      if (cell === 'ready') {
-        setScore(s => s + 1); // Harvest flower
-      }
-      newGrid[row][col] = 'empty';
-    } else {
-      // Seeds tool - normal growth cycle
-      if (cell === 'ready') {
-        // Flower is final state, nothing happens
-        return;
-      }
-
-      switch (cell) {
-        case 'empty':
-          newGrid[row][col] = 'seeded';
-          break;
-        case 'seeded':
-          newGrid[row][col] = 'watered';
-          break;
-        case 'watered':
-          newGrid[row][col] = 'growing';
-          break;
-        case 'growing':
-          newGrid[row][col] = 'ready';
-          break;
-      }
+    // If no tool selected and clicking empty/seed/plant, show context menu
+    if (!shovelActive && (cell === 'empty' || cell === 'seed' || cell === 'plantSmall' || cell === 'plantBig')) {
+      setSelectedCell({row, col});
+      setShowMenu(true);
+      return;
     }
 
-    setGrid(newGrid);
-    playPopSound();
+    // Shovel logic
+    if (shovelActive) {
+      if (cell === 'flower') {
+        // Harvest flower - get random seeds (1-3)
+        const seedsGained = Math.floor(Math.random() * 3) + 1;
+        setSeeds(s => s + seedsGained);
+        setScore(s => s + 1);
+        newGrid[row][col] = 'empty';
+        playPopSound();
+      } else if (cell === 'seed' || cell === 'plantSmall' || cell === 'plantBig') {
+        // Clear plant - recover seed
+        setSeeds(s => s + 1);
+        newGrid[row][col] = 'empty';
+        playPopSound();
+      }
+      setGrid(newGrid);
+      return;
+    }
+
+    // Menu actions
+    if (showMenu && selectedCell) {
+      setShowMenu(false);
+      setSelectedCell(null);
+      
+      if (cell === 'empty') {
+        // Plant seed
+        if (seeds > 0) return;
+        newGrid[row][col] = 'seed';
+        setSeeds(s => s - 1);
+      } else if (cell === 'seed') {
+        // Water seed
+        newGrid[row][col] = 'plantSmall';
+      } else if (cell === 'plantSmall') {
+        // Water small plant
+        newGrid[row][col] = 'plantBig';
+      }
+      
+      setGrid(newGrid);
+      playPopSound();
+    }
   };
 
-  const getCellEmoji = (cell: CellState, row: number, col: number): string => {
+  const getCellEmoji = (cell: CellState): string => {
     switch (cell) {
       case 'empty': return '🟫';
-      case 'seeded': return '🌱';
-      case 'watered': return '💧';
-      case 'growing': return '🌿';
-      case 'ready': return flowerGrid[row]?.[col] || '🌸';
+      case 'seed': return '🌱';
+      case 'plantSmall': return '🌿';
+      case 'plantBig': return '🌱';
+      case 'flower': return FLOWERS[Math.floor(Math.random() * FLOWERS.length)];
       default: return '🟫';
     }
   };
 
-  const getStageName = (cell: CellState, row: number, col: number): string => {
+  const getCellStateDescription = (cell: CellState): string => {
     switch (cell) {
-      case 'empty': return 'Plant seed';
-      case 'seeded': return 'Water';
-      case 'watered': return 'Growing';
-      case 'growing': return 'Almost ready';
-      case 'ready': return `Harvest ${flowerGrid[row]?.[col] || '🌸'}!`;
-      default: return 'Plant seed';
+      case 'empty': return 'Empty soil';
+      case 'seed': return 'Planted seed';
+      case 'plantSmall': return 'Small plant';
+      case 'plantBig': return 'Growing plant';
+      case 'flower': return 'Ready to harvest!';
+      default: return 'Empty soil';
     }
   };
 
-  // Create hidden audio elements
   return (
     <>
       <audio ref={backgroundAudioRef} loop>
@@ -165,48 +205,113 @@ export default function GardenGame() {
       <div className="min-h-screen bg-gradient-to-b from-green-100 to-green-200 flex flex-col items-center justify-center p-4 font-mono relative">
         {/* Floating right toolbar */}
         <div className="fixed right-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-3 flex flex-col gap-3">
-          <button
-            onClick={() => setSelectedTool('seeds')}
-            className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
-              selectedTool === 'seeds'
-                ? 'bg-green-500 text-white shadow-lg scale-110'
-                : 'bg-gray-100 hover:bg-gray-200'
-            }`}
-            title="Seeds - Plant and grow"
-          >
-            🌱
-          </button>
-          <button
-            onClick={() => setSelectedTool('shovel')}
-            className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
-              selectedTool === 'shovel'
-                ? 'bg-amber-500 text-white shadow-lg scale-110'
-                : 'bg-gray-100 hover:bg-gray-200'
-            }`}
-            title="Shovel - Clear or harvest"
-          >
-            {HARVEST_EMOJIS[Math.floor(Math.random() * HARVEST_EMOJIS.length)]}
-          </button>
-          <div className="text-xs text-center text-gray-500">
-            Seeds: 99
+          <div className="flex flex-col items-center gap-2">
+            {/* Seeds button */}
+            <button
+              onClick={() => {
+                useSeed();
+                if (!audioEnabled) enableAudio();
+              }}
+              disabled={seeds === 0}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
+                seeds > 0
+                  ? 'bg-green-500 text-white hover:bg-green-600 active:bg-green-700'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+              title={`Plant a seed (${seeds} remaining)`}
+            >
+              🌱
+            </button>
+            <div className="text-xs text-center text-gray-600">
+              {seeds}
+            </div>
           </div>
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`w-14 h-10 rounded-lg flex items-center justify-center text-sm transition-all ${
-              soundEnabled
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-300 text-gray-600'
-            }`}
-            title="Toggle sound"
-          >
-            {soundEnabled && audioEnabled ? '🔊' : '🔇'}
-          </button>
+
+          <div className="h-px bg-gray-300"></div>
+
+          <div className="flex flex-col items-center gap-2">
+            {/* Shovel button */}
+            <button
+              onClick={() => {
+                toggleShovel();
+                if (!audioEnabled) enableAudio();
+              }}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
+                shovelActive
+                  ? 'bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+              title={shovelActive ? 'Shovel active' : 'Toggle shovel'}
+            >
+              {HARVEST_EMOJIS[Math.floor(Math.random() * HARVEST_EMOJIS.length)]}
+            </button>
+            <div className="text-xs text-center text-gray-600">
+              {shovelActive ? 'Active' : 'Shovel'}
+            </div>
+          </div>
+
+          <div className="h-px bg-gray-300"></div>
+
+          <div className="flex flex-col items-center gap-2">
+            {/* Audio toggle */}
+            <button
+              onClick={toggleAudio}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-2xl transition-all ${
+                soundEnabled && audioEnabled
+                  ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700'
+                  : 'bg-gray-300 text-gray-700 hover:bg-gray-200'
+              }`}
+              title="Toggle sound"
+            >
+              {soundEnabled && audioEnabled ? '🔊' : '🔇'}
+            </button>
+            <div className="text-xs text-center text-gray-600">
+              {soundEnabled && audioEnabled ? 'Sound on' : 'Sound off'}
+            </div>
+          </div>
+
           {!audioEnabled && (
-            <div className="text-xs text-center text-red-500">
+            <div className="text-xs text-center text-blue-600 mt-2">
               Tap to enable
             </div>
           )}
         </div>
+
+        {/* Context menu */}
+        {showMenu && selectedCell && (
+          <div 
+            ref={menuRef}
+            className="fixed bg-white rounded-lg shadow-xl p-2 z-50 flex flex-col gap-2"
+            style={{
+              top: `${selectedCell.row * 80 + 120}px`,
+              left: `${selectedCell.col * 80 + 200}px`
+            }}
+          >
+            <div className="text-sm font-semibold text-gray-700 mb-1">
+              {getCellStateDescription(grid[selectedCell.row][selectedCell.col])}
+            </div>
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => handleTileClick(selectedCell.row, selectedCell.col)}
+                className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 text-sm flex items-center gap-2"
+              >
+                ⛏️ <span>Clear/Shovel</span>
+              </button>
+              <button
+                onClick={() => handleTileClick(selectedCell.row, selectedCell.col)}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm flex items-center gap-2"
+              >
+                💧 <span>Water</span>
+              </button>
+              <button
+                onClick={() => handleTileClick(selectedCell.row, selectedCell.col)}
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm flex items-center gap-2"
+              >
+                🌱 <span>Plant seed</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="max-w-md w-full">
           <h1 className="text-3xl font-bold text-center mb-4 text-green-800">🌻 Little Garden</h1>
@@ -219,17 +324,17 @@ export default function GardenGame() {
                 row.map((cell, colIndex) => (
                   <button
                     key={`${rowIndex}-${colIndex}`}
-                    onClick={() => handleClick(rowIndex, colIndex)}
+                    onClick={() => handleTileClick(rowIndex, colIndex)}
                     className={`w-full aspect-square rounded flex items-center justify-center text-3xl transition-all duration-150 select-none touch-manipulation ${
-                      selectedTool === 'shovel'
+                      shovelActive
                         ? 'bg-red-900 hover:bg-red-800 active:bg-red-700'
+                        : cell === 'flower'
+                        ? 'bg-green-700 hover:bg-green-600 active:bg-green-500 animate-pulse'
                         : 'bg-amber-800 hover:bg-amber-700 active:bg-amber-600'
-                    } ${
-                      cell === 'ready' ? 'animate-pulse' : ''
                     }`}
-                    title={getStageName(cell, rowIndex, colIndex)}
+                    title={getCellStateDescription(cell)}
                   >
-                    {getCellEmoji(cell, rowIndex, colIndex)}
+                    {getCellEmoji(cell)}
                   </button>
                 ))
               )}
@@ -237,14 +342,16 @@ export default function GardenGame() {
           </div>
           <div className="bg-white rounded-lg shadow-lg p-4 text-center">
             <p className="text-sm text-gray-600">
-              {selectedTool === 'seeds' ? 'Tap to plant → water → grow → harvest!' : 'Use shovel to clear or harvest flowers!'}
+              {shovelActive 
+                ? 'Shovel active - click flowers to harvest (1-3 seeds) or plants to clear them!'
+                : 'Tap empty soil or plants to see options, or use shovel directly!'
+              }
             </p>
             <div className="flex justify-center gap-2 mt-2 text-2xl">
               <span>🌱</span>
               <span>💧</span>
               <span>🌿</span>
               <span>🌻</span>
-              <span>🌺</span>
             </div>
           </div>
         </div>
