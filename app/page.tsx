@@ -11,9 +11,14 @@ type GridState = CellState[][];
 const FLOWERS = ['🌻', '🌺', '🌸', '🌼'];
 const HARVEST_EMOJIS = ['🧺', '🌾', '✨', '🌟'];
 
+type FlowerGrid = (string | null)[][];
+
 export default function GardenGame() {
   const [grid, setGrid] = useState<GridState>(
-    Array(6).fill(null).map(() => Array(6).fill('empty'))
+    Array(5).fill(null).map(() => Array(5).fill('empty'))
+  );
+  const [flowerTypes, setFlowerTypes] = useState<FlowerGrid>(
+    Array(5).fill(null).map(() => Array(5).fill(null))
   );
   const [score, setScore] = useState(0);
   const [harvested, setHarvested] = useState(0);
@@ -24,6 +29,7 @@ export default function GardenGame() {
   const [selectedCell, setSelectedCell] = useState<{ row: number, col: number } | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number, y: number } | null>(null);
+  const [toolbarHidden, setToolbarHidden] = useState(false);
 
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -233,6 +239,12 @@ export default function GardenGame() {
       } else if (cell === 'plantSmall') {
         // Water small plant -> becomes big plant
         newGrid[row][col] = 'flower';
+        // Assign flower type if not already set
+        if (!flowerTypes[row][col]) {
+          const newFlowerTypes = flowerTypes.map(r => [...r]);
+          newFlowerTypes[row][col] = FLOWERS[Math.floor(Math.random() * FLOWERS.length)];
+          setFlowerTypes(newFlowerTypes);
+        }
         playWaterSound();
       }
     } else if (activeAction === 'harvest') {
@@ -250,13 +262,13 @@ export default function GardenGame() {
     setGrid(newGrid);
   };
 
-  const getCellEmoji = (cell: CellState): string => {
+  const getCellEmoji = (cell: CellState, row: number, col: number): string => {
     switch (cell) {
       case 'empty': return '🟫';
       case 'seed': return '🌱';
       case 'plantSmall': return '🌿';
       case 'plantBig': return '🌱';
-      case 'flower': return FLOWERS[Math.floor(Math.random() * FLOWERS.length)];
+      case 'flower': return flowerTypes[row][col] || FLOWERS[0];
       default: return '🟫';
     }
   };
@@ -338,6 +350,12 @@ export default function GardenGame() {
         playWaterSound();
       } else if (cell === 'plantSmall') {
         newGrid[selectedCell.row][selectedCell.col] = 'flower';
+        // Assign flower type if not already set
+        if (!flowerTypes[selectedCell.row][selectedCell.col]) {
+          const newFlowerTypes = flowerTypes.map(r => [...r]);
+          newFlowerTypes[selectedCell.row][selectedCell.col] = FLOWERS[Math.floor(Math.random() * FLOWERS.length)];
+          setFlowerTypes(newFlowerTypes);
+        }
         playWaterSound();
       }
     } else if (action === 'harvest') {
@@ -362,7 +380,7 @@ export default function GardenGame() {
 
       <div className="min-h-screen bg-gradient-to-b from-green-100 to-green-200 flex flex-col items-center justify-center p-4 font-mono relative">
         {/* Floating right toolbar */}
-        <div className="fixed right-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-3 flex flex-col gap-3">
+        <div className={`fixed right-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-3 flex flex-col gap-3 transition-all duration-300 ${toolbarHidden ? 'translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'}`}>
           <div className="flex flex-col items-center gap-2">
             {/* Plant button */}
             <button
@@ -468,12 +486,27 @@ export default function GardenGame() {
             </div>
           </div>
 
-          {!audioEnabled && (
-            <div className="text-xs text-center text-blue-600 mt-2">
-              Tap to enable
-            </div>
-          )}
+          <div className="h-px bg-gray-300"></div>
+
+          <button
+            onClick={() => setToolbarHidden(true)}
+            className="w-14 h-14 rounded-lg flex items-center justify-center text-2xl bg-gray-400 text-white hover:bg-gray-500 transition-all"
+            title="Hide toolbar"
+          >
+            ◀️
+          </button>
         </div>
+
+        {/* Toolbar toggle button (when hidden) */}
+        {toolbarHidden && (
+          <button
+            onClick={() => setToolbarHidden(false)}
+            className="fixed right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-lg flex items-center justify-center text-2xl bg-white/90 hover:bg-white shadow-xl transition-all"
+            title="Show toolbar"
+          >
+            ▶️
+          </button>
+        )}
 
         {/* Context menu */}
         {showMenu && selectedCell && menuPosition && (
@@ -543,7 +576,7 @@ export default function GardenGame() {
             </div>
           </div>
           <div className="bg-amber-900 rounded-lg shadow-xl p-3 mb-4">
-            <div className="grid grid-cols-6 gap-1">
+            <div className="grid grid-cols-5 gap-1">
               {grid.map((row, rowIndex) =>
                 row.map((cell, colIndex) => (
                   <button
@@ -557,7 +590,7 @@ export default function GardenGame() {
                       }`}
                     title={getCellStateDescription(cell)}
                   >
-                    {getCellEmoji(cell)}
+                    {getCellEmoji(cell, rowIndex, colIndex)}
                   </button>
                 ))
               )}
