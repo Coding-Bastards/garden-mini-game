@@ -30,6 +30,7 @@ export default function GardenGame() {
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number, y: number } | null>(null);
   const [toolbarHidden, setToolbarHidden] = useState(false);
+  const [noSeedsNotif, setNoSeedsNotif] = useState(false);
 
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -214,6 +215,9 @@ export default function GardenGame() {
           setSeeds(s => s - 1);
           newGrid[row][col] = 'seed';
           playPopSound();
+        } else {
+          setNoSeedsNotif(true);
+          setTimeout(() => setNoSeedsNotif(false), 2000);
         }
       }
     } else if (activeAction === 'shovel') {
@@ -330,6 +334,9 @@ export default function GardenGame() {
         setSeeds(s => s - 1);
         newGrid[selectedCell.row][selectedCell.col] = 'seed';
         playPopSound();
+      } else if (cell === 'empty' && seeds === 0) {
+        setNoSeedsNotif(true);
+        setTimeout(() => setNoSeedsNotif(false), 2000);
       }
     } else if (action === 'shovel') {
       if (cell === 'flower') {
@@ -481,9 +488,6 @@ export default function GardenGame() {
             >
               {soundEnabled && audioEnabled ? '🔊' : '🔇'}
             </button>
-            <div className="text-xs text-center text-gray-600">
-              {soundEnabled && audioEnabled ? 'Sound on' : 'Sound off'}
-            </div>
           </div>
 
           <div className="h-px bg-gray-300"></div>
@@ -506,6 +510,13 @@ export default function GardenGame() {
           >
             ▶️
           </button>
+        )}
+
+        {/* No seeds notification */}
+        {noSeedsNotif && (
+          <div className="fixed top-1/4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg animate-pulse">
+            No seeds! 🌱
+          </div>
         )}
 
         {/* Context menu */}
@@ -594,22 +605,6 @@ export default function GardenGame() {
                   </button>
                 ))
               )}
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow-lg p-4 text-center">
-            <p className="text-sm text-gray-600">
-              {activeAction
-                ? `${activeAction === 'plant' ? 'Plant' : activeAction === 'shovel' ? 'Shovel' : activeAction === 'water' ? 'Water' : 'Harvest'} active - tap to deactivate or use tool!`
-                : 'No tool selected - tap soil/plant to see actions!'
-              }
-            </p>
-            <div className="flex justify-center gap-2 mt-2 text-2xl">
-              <span>🌱</span>
-              <span>💧</span>
-              <span>🌿</span>
-              <span>🌻</span>
-              <span>⛏️</span>
-              <span>🧺</span>
             </div>
           </div>
         </div>
