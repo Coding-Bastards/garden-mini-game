@@ -21,9 +21,10 @@ export default function GardenGame() {
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [selectedCell, setSelectedCell] = useState<{row: number, col: number} | null>(null);
+  const [selectedCell, setSelectedCell] = useState<{ row: number, col: number } | null>(null);
   const [showMenu, setShowMenu] = useState(false);
-  
+  const [menuPosition, setMenuPosition] = useState<{ x: number, y: number } | null>(null);
+
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -70,28 +71,28 @@ export default function GardenGame() {
   // 8-bit pop sound
   const playPopSound = () => {
     if (!soundEnabled || !audioEnabled) return;
-    
+
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
-    
+
     const ctx = audioContextRef.current;
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
-    
+
     oscillator.connect(gain);
     gain.connect(ctx.destination);
-    
+
     // 8-bit style - square wave with envelope
     oscillator.type = 'square';
     oscillator.frequency.setValueAtTime(600, ctx.currentTime);
     oscillator.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.08);
-    
+
     // ADSR envelope for 8-bit feel
     gain.gain.setValueAtTime(0, ctx.currentTime);
     gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
-    
+
     oscillator.start(ctx.currentTime);
     oscillator.stop(ctx.currentTime + 0.08);
   };
@@ -99,31 +100,31 @@ export default function GardenGame() {
   // 8-bit harvest sound
   const playHarvestSound = () => {
     if (!soundEnabled || !audioEnabled) return;
-    
+
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
-    
+
     const ctx = audioContextRef.current;
-    
+
     // Create two oscillators for 8-bit harmony
     const osc1 = ctx.createOscillator();
     const osc2 = ctx.createOscillator();
     const gain = ctx.createGain();
-    
+
     osc1.connect(gain);
     osc2.connect(gain);
     gain.connect(ctx.destination);
-    
+
     osc1.type = 'square';
     osc2.type = 'triangle';
     osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
     osc2.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
-    
+
     gain.gain.setValueAtTime(0, ctx.currentTime);
     gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-    
+
     osc1.start(ctx.currentTime);
     osc2.start(ctx.currentTime);
     osc1.stop(ctx.currentTime + 0.15);
@@ -133,30 +134,30 @@ export default function GardenGame() {
   // 8-bit water sound
   const playWaterSound = () => {
     if (!soundEnabled || !audioEnabled) return;
-    
+
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
-    
+
     const ctx = audioContextRef.current;
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
-    
+
     oscillator.connect(filter);
     filter.connect(gain);
     gain.connect(ctx.destination);
-    
+
     oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(400, ctx.currentTime);
     oscillator.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.05);
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(1000, ctx.currentTime);
-    
+
     gain.gain.setValueAtTime(0, ctx.currentTime);
     gain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
-    
+
     oscillator.start(ctx.currentTime);
     oscillator.stop(ctx.currentTime + 0.05);
   };
@@ -180,7 +181,7 @@ export default function GardenGame() {
     setSoundEnabled(!soundEnabled);
   };
 
-  const handleTileClick = (row: number, col: number) => {
+  const handleTileClick = (row: number, col: number, event?: React.MouseEvent) => {
     // Enable audio on first interaction
     if (!audioEnabled) {
       enableAudio();
@@ -191,8 +192,11 @@ export default function GardenGame() {
 
     // If no action selected, show context menu
     if (!activeAction) {
-      setSelectedCell({row, col});
+      setSelectedCell({ row, col });
       setShowMenu(true);
+      if (event) {
+        setMenuPosition({ x: event.clientX, y: event.clientY });
+      }
       return;
     }
 
@@ -305,16 +309,57 @@ export default function GardenGame() {
   const handleContextAction = (action: ActiveAction) => {
     if (!selectedCell) return;
 
-    setActiveAction(action);
+    const cell = grid[selectedCell.row][selectedCell.col];
+    const newGrid = [...grid.map(r => [...r])];
+
+    // Action-based logic (same as handleTileClick but without state dependency)
+    if (action === 'plant') {
+      if (cell === 'empty' && seeds > 0) {
+        setSeeds(s => s - 1);
+        newGrid[selectedCell.row][selectedCell.col] = 'seed';
+        playPopSound();
+      }
+    } else if (action === 'shovel') {
+      if (cell === 'flower') {
+        const seedsGained = Math.floor(Math.random() * 3) + 1;
+        setSeeds(s => s + seedsGained);
+        setScore(s => s + 1);
+        setHarvested(h => h + 1);
+        newGrid[selectedCell.row][selectedCell.col] = 'empty';
+        playHarvestSound();
+      } else if (cell === 'seed' || cell === 'plantSmall' || cell === 'plantBig') {
+        setSeeds(s => s + 1);
+        newGrid[selectedCell.row][selectedCell.col] = 'empty';
+        playPopSound();
+      }
+    } else if (action === 'water') {
+      if (cell === 'seed') {
+        newGrid[selectedCell.row][selectedCell.col] = 'plantSmall';
+        playWaterSound();
+      } else if (cell === 'plantSmall') {
+        newGrid[selectedCell.row][selectedCell.col] = 'flower';
+        playWaterSound();
+      }
+    } else if (action === 'harvest') {
+      if (cell === 'flower') {
+        const seedsGained = Math.floor(Math.random() * 3) + 1;
+        setSeeds(s => s + seedsGained);
+        setScore(s => s + 1);
+        setHarvested(h => h + 1);
+        newGrid[selectedCell.row][selectedCell.col] = 'empty';
+        playHarvestSound();
+      }
+    }
+
+    setGrid(newGrid);
     setShowMenu(false);
-    handleTileClick(selectedCell.row, selectedCell.col);
-    setActiveAction(null); // Don't keep tool active after context menu action
+    setSelectedCell(null);
   };
 
   return (
     <>
       <audio ref={backgroundAudioRef} src="/garden-ambient.mp3" loop />
-      
+
       <div className="min-h-screen bg-gradient-to-b from-green-100 to-green-200 flex flex-col items-center justify-center p-4 font-mono relative">
         {/* Floating right toolbar */}
         <div className="fixed right-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-3 flex flex-col gap-3">
@@ -325,11 +370,10 @@ export default function GardenGame() {
                 toggleAction('plant');
                 if (!audioEnabled) enableAudio();
               }}
-              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
-                isActionActive('plant')
-                  ? 'bg-green-500 text-white hover:bg-green-600 active:bg-green-700 shadow-lg scale-105'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${isActionActive('plant')
+                ? 'bg-green-500 text-white hover:bg-green-600 active:bg-green-700 shadow-lg scale-105'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
               title={isActionActive('plant') ? 'Plant active (tap to deactivate)' : 'Plant (tap to activate)'}
             >
               🌱
@@ -348,11 +392,10 @@ export default function GardenGame() {
                 toggleAction('shovel');
                 if (!audioEnabled) enableAudio();
               }}
-              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
-                isActionActive('shovel')
-                  ? 'bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 shadow-lg scale-105'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${isActionActive('shovel')
+                ? 'bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 shadow-lg scale-105'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
               title={isActionActive('shovel') ? 'Shovel active (tap to deactivate)' : 'Shovel (tap to activate)'}
             >
               ⛏️
@@ -371,11 +414,10 @@ export default function GardenGame() {
                 toggleAction('water');
                 if (!audioEnabled) enableAudio();
               }}
-              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
-                isActionActive('water')
-                  ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 shadow-lg scale-105'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${isActionActive('water')
+                ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 shadow-lg scale-105'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
               title={isActionActive('water') ? 'Water active (tap to deactivate)' : 'Water (tap to activate)'}
             >
               💧
@@ -394,11 +436,10 @@ export default function GardenGame() {
                 toggleAction('harvest');
                 if (!audioEnabled) enableAudio();
               }}
-              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
-                isActionActive('harvest')
-                  ? 'bg-pink-500 text-white hover:bg-pink-600 active:bg-pink-700 shadow-lg scale-105'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${isActionActive('harvest')
+                ? 'bg-pink-500 text-white hover:bg-pink-600 active:bg-pink-700 shadow-lg scale-105'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
               title={isActionActive('harvest') ? 'Harvest active (tap to deactivate)' : 'Harvest (tap to activate)'}
             >
               🧺
@@ -414,11 +455,10 @@ export default function GardenGame() {
             {/* Audio toggle */}
             <button
               onClick={toggleAudio}
-              className={`w-14 h-14 rounded-lg flex items-center justify-center text-2xl transition-all ${
-                soundEnabled && audioEnabled
-                  ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700'
-                  : 'bg-gray-300 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-2xl transition-all ${soundEnabled && audioEnabled
+                ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700'
+                : 'bg-gray-300 text-gray-700 hover:bg-gray-200'
+                }`}
               title="Toggle sound"
             >
               {soundEnabled && audioEnabled ? '🔊' : '🔇'}
@@ -436,58 +476,52 @@ export default function GardenGame() {
         </div>
 
         {/* Context menu */}
-        {showMenu && selectedCell && (
-          <div 
+        {showMenu && selectedCell && menuPosition && (
+          <div
             ref={menuRef}
             className="fixed bg-white rounded-lg shadow-xl p-2 z-50 flex flex-col gap-2"
             style={{
-              top: `${selectedCell.row * 80 + 120}px`,
-              left: `${selectedCell.col * 80 + 200}px`
+              top: `${menuPosition.y}px`,
+              left: `${menuPosition.x}px`
             }}
           >
             <div className="text-sm font-semibold text-gray-700 mb-1">
               {getCellStateDescription(grid[selectedCell.row][selectedCell.col])}
             </div>
             <div className="flex flex-col gap-1">
-              <button
-                onClick={() => handleContextAction('plant')}
-                className={`px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm flex items-center gap-2 ${
-                  grid[selectedCell.row][selectedCell.col] !== 'empty' || seeds === 0
-                    ? 'opacity-50 cursor-not-allowed'
-                    : ''
-                }`}
-                disabled={grid[selectedCell.row][selectedCell.col] !== 'empty' || seeds === 0}
-              >
-                🌱 <span>Plant seed</span>
-              </button>
-              <button
-                onClick={() => handleContextAction('shovel')}
-                className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 text-sm flex items-center gap-2"
-              >
-                ⛏️ <span>Clear/Shovel</span>
-              </button>
-              <button
-                onClick={() => handleContextAction('water')}
-                className={`px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm flex items-center gap-2 ${
-                  grid[selectedCell.row][selectedCell.col] === 'empty' || grid[selectedCell.row][selectedCell.col] === 'flower'
-                    ? 'opacity-50 cursor-not-allowed'
-                    : ''
-                }`}
-                disabled={grid[selectedCell.row][selectedCell.col] === 'empty' || grid[selectedCell.row][selectedCell.col] === 'flower'}
-              >
-                💧 <span>Water</span>
-              </button>
-              <button
-                onClick={() => handleContextAction('harvest')}
-                className={`px-4 py-2 bg-pink-500 text-white rounded hover:bg-pink-600 text-sm flex items-center gap-2 ${
-                  grid[selectedCell.row][selectedCell.col] !== 'flower'
-                    ? 'opacity-50 cursor-not-allowed'
-                    : ''
-                }`}
-                disabled={grid[selectedCell.row][selectedCell.col] !== 'flower'}
-              >
-                🧺 <span>Harvest/Basket</span>
-              </button>
+              {grid[selectedCell.row][selectedCell.col] === 'empty' && (
+                <button
+                  onClick={() => handleContextAction('plant')}
+                  className={`px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm flex items-center gap-2 ${seeds === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={seeds === 0}
+                >
+                  🌱 <span>Plant seed {seeds === 0 ? '(empty)' : ''}</span>
+                </button>
+              )}
+              {grid[selectedCell.row][selectedCell.col] !== 'empty' && (
+                <button
+                  onClick={() => handleContextAction('shovel')}
+                  className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 text-sm flex items-center gap-2"
+                >
+                  ⛏️ <span>Clear/Shovel</span>
+                </button>
+              )}
+              {(grid[selectedCell.row][selectedCell.col] === 'seed' || grid[selectedCell.row][selectedCell.col] === 'plantSmall') && (
+                <button
+                  onClick={() => handleContextAction('water')}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm flex items-center gap-2"
+                >
+                  💧 <span>Water</span>
+                </button>
+              )}
+              {grid[selectedCell.row][selectedCell.col] === 'flower' && (
+                <button
+                  onClick={() => handleContextAction('harvest')}
+                  className="px-4 py-2 bg-pink-500 text-white rounded hover:bg-pink-600 text-sm flex items-center gap-2"
+                >
+                  🧺 <span>Harvest/Basket</span>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -514,14 +548,13 @@ export default function GardenGame() {
                 row.map((cell, colIndex) => (
                   <button
                     key={`${rowIndex}-${colIndex}`}
-                    onClick={() => handleTileClick(rowIndex, colIndex)}
-                    className={`w-full aspect-square rounded flex items-center justify-center text-3xl transition-all duration-150 select-none touch-manipulation ${
-                      activeAction && canBeAffectedByTool(cell, activeAction)
-                        ? getToolColor(activeAction) + ' hover:bg-opacity-80 active:bg-opacity-60'
-                        : cell === 'flower'
-                        ? 'bg-green-700 hover:bg-green-600 active:bg-green-500 animate-pulse'
+                    onClick={(e) => handleTileClick(rowIndex, colIndex, e)}
+                    className={`w-full aspect-square rounded flex items-center justify-center text-3xl transition-all duration-150 select-none touch-manipulation ${activeAction && canBeAffectedByTool(cell, activeAction)
+                      ? getToolColor(activeAction) + ' hover:bg-opacity-80 active:bg-opacity-60'
+                      : cell === 'flower'
+                        ? 'bg-pink-700 hover:bg-pink-600 active:bg-pink-500 animate-pulse'
                         : 'bg-amber-800 hover:bg-amber-700 active:bg-amber-600'
-                    }`}
+                      }`}
                     title={getCellStateDescription(cell)}
                   >
                     {getCellEmoji(cell)}
@@ -532,7 +565,7 @@ export default function GardenGame() {
           </div>
           <div className="bg-white rounded-lg shadow-lg p-4 text-center">
             <p className="text-sm text-gray-600">
-              {activeAction 
+              {activeAction
                 ? `${activeAction === 'plant' ? 'Plant' : activeAction === 'shovel' ? 'Shovel' : activeAction === 'water' ? 'Water' : 'Harvest'} active - tap to deactivate or use tool!`
                 : 'No tool selected - tap soil/plant to see actions!'
               }
