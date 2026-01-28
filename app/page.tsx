@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { GiPlantSeed, GiWaterDrop, GiFlowers, GiShower } from 'react-icons/gi';
 import { IoVolumeMute, IoVolumeHigh } from 'react-icons/io5';
 import { MdChevronLeft, MdChevronRight } from 'react-icons/md';
+import confetti from 'canvas-confetti';
 
 type CellState = 'empty' | 'seed' | 'plantSmall' | 'plantBig' | 'flower';
 type ActiveAction = null | 'plant' | 'shovel' | 'water' | 'harvest';
@@ -198,6 +199,14 @@ export default function GardenGame() {
     oscillator.stop(ctx.currentTime + 0.05);
   };
 
+  const playHarvestConfetti = () => {
+    confetti({
+      particleCount: 50,
+      spread: 70,
+      origin: { y: 0.5 },
+    } as any);
+  };
+
   const enableAudio = () => {
     setAudioEnabled(true);
   };
@@ -258,6 +267,7 @@ export default function GardenGame() {
         setHarvested(h => h + 1);
         newGrid[row][col] = 'empty';
         playHarvestSound();
+        playHarvestConfetti();
       } else if (cell === 'seed' || cell === 'plantSmall' || cell === 'plantBig') {
         // Clear plant - recover seed
         setSeeds(s => s + 1);
@@ -289,6 +299,7 @@ export default function GardenGame() {
         setHarvested(h => h + 1);
         newGrid[row][col] = 'empty';
         playHarvestSound();
+        playHarvestConfetti();
       }
     }
 
@@ -375,6 +386,7 @@ export default function GardenGame() {
         setHarvested(h => h + 1);
         newGrid[selectedCell.row][selectedCell.col] = 'empty';
         playHarvestSound();
+        playHarvestConfetti();
       } else if (cell === 'seed' || cell === 'plantSmall' || cell === 'plantBig') {
         setSeeds(s => s + 1);
         newGrid[selectedCell.row][selectedCell.col] = 'empty';
@@ -402,6 +414,7 @@ export default function GardenGame() {
         setHarvested(h => h + 1);
         newGrid[selectedCell.row][selectedCell.col] = 'empty';
         playHarvestSound();
+        playHarvestConfetti();
       }
     }
 
