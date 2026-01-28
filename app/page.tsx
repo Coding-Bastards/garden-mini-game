@@ -54,7 +54,7 @@ export default function GardenGame() {
     if (!backgroundAudioRef.current) {
       backgroundAudioRef.current = new Audio('/garden-ambient.mp3');
       backgroundAudioRef.current.loop = true;
-      backgroundAudioRef.current.volume = 0.02; // Very quiet ambient
+      backgroundAudioRef.current.volume = 0.005; // Very quiet ambient
     }
 
     // Play background music
@@ -228,7 +228,7 @@ export default function GardenGame() {
         playWaterSound();
       } else if (cell === 'plantSmall') {
         // Water small plant -> becomes big plant
-        newGrid[row][col] = 'plantBig';
+        newGrid[row][col] = 'flower';
         playWaterSound();
       }
     } else if (activeAction === 'harvest') {
