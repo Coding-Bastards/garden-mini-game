@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { GiPlantSeed, GiWaterDrop, GiFlowers, GiShower } from 'react-icons/gi';
+import { IoVolumeMute, IoVolumeHigh } from 'react-icons/io5';
+import { MdChevronLeft, MdChevronRight } from 'react-icons/md';
 
 type CellState = 'empty' | 'seed' | 'plantSmall' | 'plantBig' | 'flower';
 type ActiveAction = null | 'plant' | 'shovel' | 'water' | 'harvest';
@@ -387,7 +390,13 @@ export default function GardenGame() {
 
       <div className="min-h-screen bg-gradient-to-b from-green-100 to-green-200 flex flex-col items-center justify-center p-4 font-mono relative">
         {/* Floating right toolbar */}
-        <div className={`fixed right-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-3 flex flex-col gap-3 transition-all duration-300 ${toolbarHidden ? 'translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'}`}>
+        <div className={`fixed right-4 top-1/2 -translate-y-1/2 bg-gradient-to-br from-purple-400 to-pink-400 backdrop-blur-sm rounded-2xl shadow-2xl p-4 flex flex-col gap-4 transition-all duration-300 cursor-grab active:cursor-grabbing animate-bounce ${toolbarHidden ? 'translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'}`} draggable onDragStart={(e) => e.dataTransfer!.setData('text/plain', '')} onDragEnd={(e) => {
+          if (e.clientX !== 0 || e.clientY !== 0) {
+            const el = e.currentTarget as HTMLElement;
+            el.style.right = `${Math.max(0, window.innerWidth - e.clientX - 28)}px`;
+            el.style.top = `${e.clientY - 28}px`;
+          }
+        }}>
           <div className="flex flex-col items-center gap-2">
             {/* Plant button */}
             <button
@@ -395,20 +404,20 @@ export default function GardenGame() {
                 toggleAction('plant');
                 if (!audioEnabled) enableAudio();
               }}
-              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${isActionActive('plant')
-                ? 'bg-green-500 text-white hover:bg-green-600 active:bg-green-700 shadow-lg scale-105'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${isActionActive('plant')
+                ? 'bg-green-500 text-white hover:bg-green-600 active:bg-green-700 shadow-lg scale-110'
+                : 'bg-white text-green-600 hover:bg-green-100'
                 }`}
               title={isActionActive('plant') ? 'Plant active (tap to deactivate)' : 'Plant (tap to activate)'}
             >
-              🌱
+              <GiPlantSeed size={28} />
             </button>
-            <div className="text-xs text-center text-gray-600">
+            <div className="text-xs text-center text-white font-bold">
               Seeds: {seeds}
             </div>
           </div>
 
-          <div className="h-px bg-gray-300"></div>
+          <div className="h-px bg-white/30"></div>
 
           <div className="flex flex-col items-center gap-2">
             {/* Shovel button */}
@@ -417,20 +426,20 @@ export default function GardenGame() {
                 toggleAction('shovel');
                 if (!audioEnabled) enableAudio();
               }}
-              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${isActionActive('shovel')
-                ? 'bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 shadow-lg scale-105'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${isActionActive('shovel')
+                ? 'bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 shadow-lg scale-110'
+                : 'bg-white text-amber-600 hover:bg-amber-100'
                 }`}
               title={isActionActive('shovel') ? 'Shovel active (tap to deactivate)' : 'Shovel (tap to activate)'}
             >
-              ⛏️
+              <GiShower size={28} />
             </button>
-            <div className="text-xs text-center text-gray-600">
-              {isActionActive('shovel') ? 'Active' : 'Shovel'}
+            <div className="text-xs text-center text-white font-bold">
+              {isActionActive('shovel') ? 'Active' : 'Dig'}
             </div>
           </div>
 
-          <div className="h-px bg-gray-300"></div>
+          <div className="h-px bg-white/30"></div>
 
           <div className="flex flex-col items-center gap-2">
             {/* Water button */}
@@ -439,20 +448,20 @@ export default function GardenGame() {
                 toggleAction('water');
                 if (!audioEnabled) enableAudio();
               }}
-              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${isActionActive('water')
-                ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 shadow-lg scale-105'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${isActionActive('water')
+                ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 shadow-lg scale-110'
+                : 'bg-white text-blue-600 hover:bg-blue-100'
                 }`}
               title={isActionActive('water') ? 'Water active (tap to deactivate)' : 'Water (tap to activate)'}
             >
-              💧
+              <GiWaterDrop size={28} />
             </button>
-            <div className="text-xs text-center text-gray-600">
+            <div className="text-xs text-center text-white font-bold">
               {isActionActive('water') ? 'Active' : 'Water'}
             </div>
           </div>
 
-          <div className="h-px bg-gray-300"></div>
+          <div className="h-px bg-white/30"></div>
 
           <div className="flex flex-col items-center gap-2">
             {/* Harvest/Basket button */}
@@ -461,43 +470,43 @@ export default function GardenGame() {
                 toggleAction('harvest');
                 if (!audioEnabled) enableAudio();
               }}
-              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${isActionActive('harvest')
-                ? 'bg-pink-500 text-white hover:bg-pink-600 active:bg-pink-700 shadow-lg scale-105'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${isActionActive('harvest')
+                ? 'bg-pink-500 text-white hover:bg-pink-600 active:bg-pink-700 shadow-lg scale-110'
+                : 'bg-white text-pink-600 hover:bg-pink-100'
                 }`}
               title={isActionActive('harvest') ? 'Harvest active (tap to deactivate)' : 'Harvest (tap to activate)'}
             >
-              🧺
+              <GiFlowers size={28} />
             </button>
-            <div className="text-xs text-center text-gray-600">
+            <div className="text-xs text-center text-white font-bold">
               {isActionActive('harvest') ? 'Active' : 'Harvest'}
             </div>
           </div>
 
-          <div className="h-px bg-gray-300"></div>
+          <div className="h-px bg-white/30"></div>
 
           <div className="flex flex-col items-center gap-2">
             {/* Audio toggle */}
             <button
               onClick={toggleAudio}
-              className={`w-14 h-14 rounded-lg flex items-center justify-center text-2xl transition-all ${soundEnabled && audioEnabled
-                ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700'
-                : 'bg-gray-300 text-gray-700 hover:bg-gray-200'
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${soundEnabled && audioEnabled
+                ? 'bg-purple-500 text-white hover:bg-purple-600'
+                : 'bg-white text-purple-600 hover:bg-purple-100'
                 }`}
               title="Toggle sound"
             >
-              {soundEnabled && audioEnabled ? '🔊' : '🔇'}
+              {soundEnabled && audioEnabled ? <IoVolumeHigh size={28} /> : <IoVolumeMute size={28} />}
             </button>
           </div>
 
-          <div className="h-px bg-gray-300"></div>
+          <div className="h-px bg-white/30"></div>
 
           <button
             onClick={() => setToolbarHidden(true)}
-            className="w-14 h-14 rounded-lg flex items-center justify-center text-2xl bg-gray-400 text-white hover:bg-gray-500 transition-all"
+            className="w-14 h-14 rounded-full flex items-center justify-center bg-white text-purple-600 hover:bg-purple-100 transition-all"
             title="Hide toolbar"
           >
-            ◀️
+            <MdChevronRight size={28} />
           </button>
         </div>
 
@@ -505,10 +514,10 @@ export default function GardenGame() {
         {toolbarHidden && (
           <button
             onClick={() => setToolbarHidden(false)}
-            className="fixed right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-lg flex items-center justify-center text-2xl bg-white/90 hover:bg-white shadow-xl transition-all"
+            className="fixed right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-400 to-pink-400 text-white shadow-xl hover:shadow-2xl transition-all"
             title="Show toolbar"
           >
-            ▶️
+            <MdChevronLeft size={24} />
           </button>
         )}
 
