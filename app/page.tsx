@@ -24,8 +24,7 @@ export default function GardenGame() {
   const [selectedCell, setSelectedCell] = useState<{row: number, col: number} | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   
-  const backgroundOscillatorRef = useRef<OscillatorNode | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
+  const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -41,6 +40,32 @@ export default function GardenGame() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Background music setup
+  useEffect(() => {
+    if (!soundEnabled || !audioEnabled) {
+      if (backgroundAudioRef.current) {
+        backgroundAudioRef.current.pause();
+      }
+      return;
+    }
+
+    // Create audio element for background music
+    if (!backgroundAudioRef.current) {
+      backgroundAudioRef.current = new Audio('/garden-ambient.mp3');
+      backgroundAudioRef.current.loop = true;
+      backgroundAudioRef.current.volume = 0.02; // Very quiet ambient
+    }
+
+    // Play background music
+    backgroundAudioRef.current.play().catch(console.error);
+
+    return () => {
+      if (backgroundAudioRef.current) {
+        backgroundAudioRef.current.pause();
+      }
+    };
+  }, [soundEnabled, audioEnabled]);
 
   // 8-bit pop sound
   const playPopSound = () => {
@@ -135,60 +160,6 @@ export default function GardenGame() {
     oscillator.start(ctx.currentTime);
     oscillator.stop(ctx.currentTime + 0.05);
   };
-
-  // 8-bit ambient garden music loop
-  useEffect(() => {
-    if (!soundEnabled || !audioEnabled) {
-      if (backgroundOscillatorRef.current) {
-        backgroundOscillatorRef.current.stop();
-        backgroundOscillatorRef.current = null;
-      }
-      return;
-    }
-
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    
-    const ctx = audioContextRef.current;
-    const gain = ctx.createGain();
-    gain.connect(ctx.destination);
-    gain.gain.setValueAtTime(0.015, ctx.currentTime); // Very quiet ambient
-    
-    // Simple 8-bit melody (C major scale)
-    const melody = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 261.63, 293.66];
-    const noteDuration = 2; // seconds per note
-    let noteIndex = 0;
-    
-    const playNote = () => {
-      if (!backgroundOscillatorRef.current) return;
-      
-      const oscillator = ctx.createOscillator();
-      oscillator.type = 'square';
-      oscillator.frequency.setValueAtTime(melody[noteIndex], ctx.currentTime);
-      
-      oscillator.connect(gain);
-      oscillator.start(ctx.currentTime);
-      
-      // Very short notes for 8-bit feel
-      setTimeout(() => {
-        oscillator.stop(ctx.currentTime);
-      }, noteDuration * 1000);
-      
-      noteIndex = (noteIndex + 1) % melody.length;
-    };
-    
-    // Start melody loop
-    const melodyInterval = setInterval(playNote, noteDuration * 1000);
-    
-    return () => {
-      clearInterval(melodyInterval);
-      if (backgroundOscillatorRef.current) {
-        backgroundOscillatorRef.current.stop();
-        backgroundOscillatorRef.current = null;
-      }
-    };
-  }, [soundEnabled, audioEnabled]);
 
   const enableAudio = () => {
     setAudioEnabled(true);
@@ -301,265 +272,282 @@ export default function GardenGame() {
     return activeAction === action;
   };
 
+  const canBeAffectedByTool = (cell: CellState, tool: ActiveAction): boolean => {
+    switch (tool) {
+      case 'plant':
+        return cell === 'empty';
+      case 'water':
+        return cell === 'seed' || cell === 'plantSmall';
+      case 'shovel':
+        return cell === 'seed' || cell === 'plantSmall' || cell === 'plantBig' || cell === 'flower';
+      case 'harvest':
+        return cell === 'flower';
+      default:
+        return false;
+    }
+  };
+
+  const getToolColor = (tool: ActiveAction): string => {
+    switch (tool) {
+      case 'plant':
+        return 'bg-green-900';
+      case 'water':
+        return 'bg-blue-900';
+      case 'shovel':
+        return 'bg-red-900';
+      case 'harvest':
+        return 'bg-pink-900';
+      default:
+        return 'bg-amber-800';
+    }
+  };
+
+  const handleContextAction = (action: ActiveAction) => {
+    if (!selectedCell) return;
+
+    setActiveAction(action);
+    setShowMenu(false);
+    handleTileClick(selectedCell.row, selectedCell.col);
+    setActiveAction(null); // Don't keep tool active after context menu action
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-100 to-green-200 flex flex-col items-center justify-center p-4 font-mono relative">
-      {/* Floating right toolbar */}
-      <div className="fixed right-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-3 flex flex-col gap-3">
-        <div className="flex flex-col items-center gap-2">
-          {/* Plant button */}
-          <button
-            onClick={() => {
-              toggleAction('plant');
-              if (!audioEnabled) enableAudio();
+    <>
+      <audio ref={backgroundAudioRef} src="/garden-ambient.mp3" loop />
+      
+      <div className="min-h-screen bg-gradient-to-b from-green-100 to-green-200 flex flex-col items-center justify-center p-4 font-mono relative">
+        {/* Floating right toolbar */}
+        <div className="fixed right-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-3 flex flex-col gap-3">
+          <div className="flex flex-col items-center gap-2">
+            {/* Plant button */}
+            <button
+              onClick={() => {
+                toggleAction('plant');
+                if (!audioEnabled) enableAudio();
+              }}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
+                isActionActive('plant')
+                  ? 'bg-green-500 text-white hover:bg-green-600 active:bg-green-700 shadow-lg scale-105'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+              title={isActionActive('plant') ? 'Plant active (tap to deactivate)' : 'Plant (tap to activate)'}
+            >
+              🌱
+            </button>
+            <div className="text-xs text-center text-gray-600">
+              Seeds: {seeds}
+            </div>
+          </div>
+
+          <div className="h-px bg-gray-300"></div>
+
+          <div className="flex flex-col items-center gap-2">
+            {/* Shovel button */}
+            <button
+              onClick={() => {
+                toggleAction('shovel');
+                if (!audioEnabled) enableAudio();
+              }}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
+                isActionActive('shovel')
+                  ? 'bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 shadow-lg scale-105'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+              title={isActionActive('shovel') ? 'Shovel active (tap to deactivate)' : 'Shovel (tap to activate)'}
+            >
+              ⛏️
+            </button>
+            <div className="text-xs text-center text-gray-600">
+              {isActionActive('shovel') ? 'Active' : 'Shovel'}
+            </div>
+          </div>
+
+          <div className="h-px bg-gray-300"></div>
+
+          <div className="flex flex-col items-center gap-2">
+            {/* Water button */}
+            <button
+              onClick={() => {
+                toggleAction('water');
+                if (!audioEnabled) enableAudio();
+              }}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
+                isActionActive('water')
+                  ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 shadow-lg scale-105'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+              title={isActionActive('water') ? 'Water active (tap to deactivate)' : 'Water (tap to activate)'}
+            >
+              💧
+            </button>
+            <div className="text-xs text-center text-gray-600">
+              {isActionActive('water') ? 'Active' : 'Water'}
+            </div>
+          </div>
+
+          <div className="h-px bg-gray-300"></div>
+
+          <div className="flex flex-col items-center gap-2">
+            {/* Harvest/Basket button */}
+            <button
+              onClick={() => {
+                toggleAction('harvest');
+                if (!audioEnabled) enableAudio();
+              }}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
+                isActionActive('harvest')
+                  ? 'bg-pink-500 text-white hover:bg-pink-600 active:bg-pink-700 shadow-lg scale-105'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+              title={isActionActive('harvest') ? 'Harvest active (tap to deactivate)' : 'Harvest (tap to activate)'}
+            >
+              🧺
+            </button>
+            <div className="text-xs text-center text-gray-600">
+              {isActionActive('harvest') ? 'Active' : 'Harvest'}
+            </div>
+          </div>
+
+          <div className="h-px bg-gray-300"></div>
+
+          <div className="flex flex-col items-center gap-2">
+            {/* Audio toggle */}
+            <button
+              onClick={toggleAudio}
+              className={`w-14 h-14 rounded-lg flex items-center justify-center text-2xl transition-all ${
+                soundEnabled && audioEnabled
+                  ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700'
+                  : 'bg-gray-300 text-gray-700 hover:bg-gray-200'
+              }`}
+              title="Toggle sound"
+            >
+              {soundEnabled && audioEnabled ? '🔊' : '🔇'}
+            </button>
+            <div className="text-xs text-center text-gray-600">
+              {soundEnabled && audioEnabled ? 'Sound on' : 'Sound off'}
+            </div>
+          </div>
+
+          {!audioEnabled && (
+            <div className="text-xs text-center text-blue-600 mt-2">
+              Tap to enable
+            </div>
+          )}
+        </div>
+
+        {/* Context menu */}
+        {showMenu && selectedCell && (
+          <div 
+            ref={menuRef}
+            className="fixed bg-white rounded-lg shadow-xl p-2 z-50 flex flex-col gap-2"
+            style={{
+              top: `${selectedCell.row * 80 + 120}px`,
+              left: `${selectedCell.col * 80 + 200}px`
             }}
-            className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
-              isActionActive('plant')
-                ? 'bg-green-500 text-white hover:bg-green-600 active:bg-green-700 shadow-lg scale-105'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-            title={isActionActive('plant') ? 'Plant active (tap to deactivate)' : 'Plant (tap to activate)'}
           >
-            🌱
-          </button>
-          <div className="text-xs text-center text-gray-600">
-            Seeds: {seeds}
-          </div>
-        </div>
-
-        <div className="h-px bg-gray-300"></div>
-
-        <div className="flex flex-col items-center gap-2">
-          {/* Shovel button */}
-          <button
-            onClick={() => {
-              toggleAction('shovel');
-              if (!audioEnabled) enableAudio();
-            }}
-            className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
-              isActionActive('shovel')
-                ? 'bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 shadow-lg scale-105'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-            title={isActionActive('shovel') ? 'Shovel active (tap to deactivate)' : 'Shovel (tap to activate)'}
-          >
-            ⛏️
-          </button>
-          <div className="text-xs text-center text-gray-600">
-            {isActionActive('shovel') ? 'Active' : 'Shovel'}
-          </div>
-        </div>
-
-        <div className="h-px bg-gray-300"></div>
-
-        <div className="flex flex-col items-center gap-2">
-          {/* Water button */}
-          <button
-            onClick={() => {
-              toggleAction('water');
-              if (!audioEnabled) enableAudio();
-            }}
-            className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
-              isActionActive('water')
-                ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 shadow-lg scale-105'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-            title={isActionActive('water') ? 'Water active (tap to deactivate)' : 'Water (tap to activate)'}
-          >
-            💧
-          </button>
-          <div className="text-xs text-center text-gray-600">
-            {isActionActive('water') ? 'Active' : 'Water'}
-          </div>
-        </div>
-
-        <div className="h-px bg-gray-300"></div>
-
-        <div className="flex flex-col items-center gap-2">
-          {/* Harvest/Basket button */}
-          <button
-            onClick={() => {
-              toggleAction('harvest');
-              if (!audioEnabled) enableAudio();
-            }}
-            className={`w-14 h-14 rounded-lg flex items-center justify-center text-3xl transition-all ${
-              isActionActive('harvest')
-                ? 'bg-pink-500 text-white hover:bg-pink-600 active:bg-pink-700 shadow-lg scale-105'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-            title={isActionActive('harvest') ? 'Harvest active (tap to deactivate)' : 'Harvest (tap to activate)'}
-          >
-            🧺
-          </button>
-          <div className="text-xs text-center text-gray-600">
-            {isActionActive('harvest') ? 'Active' : 'Harvest'}
-          </div>
-        </div>
-
-        <div className="h-px bg-gray-300"></div>
-
-        <div className="flex flex-col items-center gap-2">
-          {/* Audio toggle */}
-          <button
-            onClick={toggleAudio}
-            className={`w-14 h-14 rounded-lg flex items-center justify-center text-2xl transition-all ${
-              soundEnabled && audioEnabled
-                ? 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700'
-                : 'bg-gray-300 text-gray-700 hover:bg-gray-200'
-            }`}
-            title="Toggle sound"
-          >
-            {soundEnabled && audioEnabled ? '🔊' : '🔇'}
-          </button>
-          <div className="text-xs text-center text-gray-600">
-            {soundEnabled && audioEnabled ? 'Sound on' : 'Sound off'}
-          </div>
-        </div>
-
-        {!audioEnabled && (
-          <div className="text-xs text-center text-blue-600 mt-2">
-            Tap to enable
+            <div className="text-sm font-semibold text-gray-700 mb-1">
+              {getCellStateDescription(grid[selectedCell.row][selectedCell.col])}
+            </div>
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => handleContextAction('plant')}
+                className={`px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm flex items-center gap-2 ${
+                  grid[selectedCell.row][selectedCell.col] !== 'empty' || seeds === 0
+                    ? 'opacity-50 cursor-not-allowed'
+                    : ''
+                }`}
+                disabled={grid[selectedCell.row][selectedCell.col] !== 'empty' || seeds === 0}
+              >
+                🌱 <span>Plant seed</span>
+              </button>
+              <button
+                onClick={() => handleContextAction('shovel')}
+                className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 text-sm flex items-center gap-2"
+              >
+                ⛏️ <span>Clear/Shovel</span>
+              </button>
+              <button
+                onClick={() => handleContextAction('water')}
+                className={`px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm flex items-center gap-2 ${
+                  grid[selectedCell.row][selectedCell.col] === 'empty' || grid[selectedCell.row][selectedCell.col] === 'flower'
+                    ? 'opacity-50 cursor-not-allowed'
+                    : ''
+                }`}
+                disabled={grid[selectedCell.row][selectedCell.col] === 'empty' || grid[selectedCell.row][selectedCell.col] === 'flower'}
+              >
+                💧 <span>Water</span>
+              </button>
+              <button
+                onClick={() => handleContextAction('harvest')}
+                className={`px-4 py-2 bg-pink-500 text-white rounded hover:bg-pink-600 text-sm flex items-center gap-2 ${
+                  grid[selectedCell.row][selectedCell.col] !== 'flower'
+                    ? 'opacity-50 cursor-not-allowed'
+                    : ''
+                }`}
+                disabled={grid[selectedCell.row][selectedCell.col] !== 'flower'}
+              >
+                🧺 <span>Harvest/Basket</span>
+              </button>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Context menu */}
-      {showMenu && selectedCell && (
-        <div 
-          ref={menuRef}
-          className="fixed bg-white rounded-lg shadow-xl p-2 z-50 flex flex-col gap-2"
-          style={{
-            top: `${selectedCell.row * 80 + 120}px`,
-            left: `${selectedCell.col * 80 + 200}px`
-          }}
-        >
-          <div className="text-sm font-semibold text-gray-700 mb-1">
-            {getCellStateDescription(grid[selectedCell.row][selectedCell.col])}
+        <div className="max-w-md w-full">
+          <h1 className="text-3xl font-bold text-center mb-4 text-green-800">🌻 Little Garden</h1>
+          <div className="bg-white rounded-lg shadow-lg p-4 mb-4 flex justify-around">
+            <div className="text-center">
+              <p className="text-sm text-gray-600">Score</p>
+              <p className="text-2xl font-bold text-green-700">{score}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-gray-600">Harvested</p>
+              <p className="text-2xl font-bold text-green-700">{harvested}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-gray-600">Seeds</p>
+              <p className="text-2xl font-bold text-green-700">{seeds}</p>
+            </div>
           </div>
-          <div className="flex flex-col gap-1">
-            <button
-              onClick={() => {
-                setActiveAction('plant');
-                setShowMenu(false);
-                setSelectedCell(null);
-                handleTileClick(selectedCell.row, selectedCell.col);
-              }}
-              className={`px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm flex items-center gap-2 ${
-                selectedCell.row !== undefined && grid[selectedCell.row][selectedCell.col] !== 'empty' || seeds === 0
-                  ? 'opacity-50 cursor-not-allowed'
-                  : ''
-              }`}
-              disabled={selectedCell.row !== undefined && grid[selectedCell.row][selectedCell.col] !== 'empty' || seeds === 0}
-            >
-              🌱 <span>Plant seed</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveAction('shovel');
-                setShowMenu(false);
-                setSelectedCell(null);
-                handleTileClick(selectedCell.row, selectedCell.col);
-              }}
-              className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 text-sm flex items-center gap-2"
-            >
-              ⛏️ <span>Clear/Shovel</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveAction('water');
-                setShowMenu(false);
-                setSelectedCell(null);
-                handleTileClick(selectedCell.row, selectedCell.col);
-              }}
-              className={`px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm flex items-center gap-2 ${
-                selectedCell.row !== undefined && (grid[selectedCell.row][selectedCell.col] === 'empty' || grid[selectedCell.row][selectedCell.col] === 'flower')
-                  ? 'opacity-50 cursor-not-allowed'
-                  : ''
-              }`}
-              disabled={selectedCell.row !== undefined && (grid[selectedCell.row][selectedCell.col] === 'empty' || grid[selectedCell.row][selectedCell.col] === 'flower')}
-            >
-              💧 <span>Water</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveAction('harvest');
-                setShowMenu(false);
-                setSelectedCell(null);
-                handleTileClick(selectedCell.row, selectedCell.col);
-              }}
-              className={`px-4 py-2 bg-pink-500 text-white rounded hover:bg-pink-600 text-sm flex items-center gap-2 ${
-                selectedCell.row !== undefined && grid[selectedCell.row][selectedCell.col] !== 'flower'
-                  ? 'opacity-50 cursor-not-allowed'
-                  : ''
-              }`}
-              disabled={selectedCell.row !== undefined && grid[selectedCell.row][selectedCell.col] !== 'flower'}
-            >
-              🧺 <span>Harvest/Basket</span>
-            </button>
+          <div className="bg-amber-900 rounded-lg shadow-xl p-3 mb-4">
+            <div className="grid grid-cols-6 gap-1">
+              {grid.map((row, rowIndex) =>
+                row.map((cell, colIndex) => (
+                  <button
+                    key={`${rowIndex}-${colIndex}`}
+                    onClick={() => handleTileClick(rowIndex, colIndex)}
+                    className={`w-full aspect-square rounded flex items-center justify-center text-3xl transition-all duration-150 select-none touch-manipulation ${
+                      activeAction && canBeAffectedByTool(cell, activeAction)
+                        ? getToolColor(activeAction) + ' hover:bg-opacity-80 active:bg-opacity-60'
+                        : cell === 'flower'
+                        ? 'bg-green-700 hover:bg-green-600 active:bg-green-500 animate-pulse'
+                        : 'bg-amber-800 hover:bg-amber-700 active:bg-amber-600'
+                    }`}
+                    title={getCellStateDescription(cell)}
+                  >
+                    {getCellEmoji(cell)}
+                  </button>
+                ))
+              )}
+            </div>
           </div>
-        </div>
-      )}
-
-      <div className="max-w-md w-full">
-        <h1 className="text-3xl font-bold text-center mb-4 text-green-800">🌻 Little Garden</h1>
-        <div className="bg-white rounded-lg shadow-lg p-4 mb-4 flex justify-around">
-          <div className="text-center">
-            <p className="text-sm text-gray-600">Score</p>
-            <p className="text-2xl font-bold text-green-700">{score}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-sm text-gray-600">Harvested</p>
-            <p className="text-2xl font-bold text-green-700">{harvested}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-sm text-gray-600">Seeds</p>
-            <p className="text-2xl font-bold text-green-700">{seeds}</p>
-          </div>
-        </div>
-        <div className="bg-amber-900 rounded-lg shadow-xl p-3 mb-4">
-          <div className="grid grid-cols-6 gap-1">
-            {grid.map((row, rowIndex) =>
-              row.map((cell, colIndex) => (
-                <button
-                  key={`${rowIndex}-${colIndex}`}
-                  onClick={() => handleTileClick(rowIndex, colIndex)}
-                  className={`w-full aspect-square rounded flex items-center justify-center text-3xl transition-all duration-150 select-none touch-manipulation ${
-                    isActionActive('shovel')
-                      ? 'bg-red-900 hover:bg-red-800 active:bg-red-700'
-                      : isActionActive('water')
-                      ? 'bg-blue-900 hover:bg-blue-800 active:bg-blue-700'
-                      : isActionActive('harvest')
-                      ? 'bg-pink-900 hover:bg-pink-800 active:bg-pink-700'
-                      : isActionActive('plant')
-                      ? 'bg-green-900 hover:bg-green-800 active:bg-green-700'
-                      : cell === 'flower'
-                      ? 'bg-green-700 hover:bg-green-600 active:bg-green-500 animate-pulse'
-                      : 'bg-amber-800 hover:bg-amber-700 active:bg-amber-600'
-                  }`}
-                  title={getCellStateDescription(cell)}
-                >
-                  {getCellEmoji(cell)}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-lg p-4 text-center">
-          <p className="text-sm text-gray-600">
-            {activeAction 
-              ? `${activeAction === 'plant' ? 'Plant' : activeAction === 'shovel' ? 'Shovel' : activeAction === 'water' ? 'Water' : 'Harvest'} active - tap to deactivate or use tool!`
-              : 'No tool selected - tap soil/plant to see actions!'
+          <div className="bg-white rounded-lg shadow-lg p-4 text-center">
+            <p className="text-sm text-gray-600">
+              {activeAction 
+                ? `${activeAction === 'plant' ? 'Plant' : activeAction === 'shovel' ? 'Shovel' : activeAction === 'water' ? 'Water' : 'Harvest'} active - tap to deactivate or use tool!`
+                : 'No tool selected - tap soil/plant to see actions!'
               }
-          </p>
-          <div className="flex justify-center gap-2 mt-2 text-2xl">
-            <span>🌱</span>
-            <span>💧</span>
-            <span>🌿</span>
-            <span>🌻</span>
-            <span>⛏️</span>
-            <span>🧺</span>
+            </p>
+            <div className="flex justify-center gap-2 mt-2 text-2xl">
+              <span>🌱</span>
+              <span>💧</span>
+              <span>🌿</span>
+              <span>🌻</span>
+              <span>⛏️</span>
+              <span>🧺</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
