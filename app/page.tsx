@@ -38,6 +38,9 @@ export default function GardenGame() {
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarPos, setToolbarPos] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
 
   // Click outside to close menu
   useEffect(() => {
@@ -51,6 +54,29 @@ export default function GardenGame() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Drag toolbar
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !toolbarRef.current) return;
+      setToolbarPos({
+        x: e.clientX - (toolbarRef.current.offsetWidth / 2),
+        y: e.clientY - (toolbarRef.current.offsetHeight / 2)
+      });
+    };
+
+    const handleMouseUp = () => setIsDragging(false);
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   // Background music setup
   useEffect(() => {
@@ -390,13 +416,17 @@ export default function GardenGame() {
 
       <div className="min-h-screen bg-gradient-to-b from-green-100 to-green-200 flex flex-col items-center justify-center p-4 font-mono relative">
         {/* Floating right toolbar */}
-        <div className={`fixed right-4 top-1/2 -translate-y-1/2 bg-gradient-to-br from-purple-400 to-pink-400 backdrop-blur-sm rounded-2xl shadow-2xl p-4 flex flex-col gap-4 transition-all duration-300 cursor-grab active:cursor-grabbing animate-bounce ${toolbarHidden ? 'translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'}`} draggable onDragStart={(e) => e.dataTransfer!.setData('text/plain', '')} onDragEnd={(e) => {
-          if (e.clientX !== 0 || e.clientY !== 0) {
-            const el = e.currentTarget as HTMLElement;
-            el.style.right = `${Math.max(0, window.innerWidth - e.clientX - 28)}px`;
-            el.style.top = `${e.clientY - 28}px`;
-          }
-        }}>
+        <div 
+          ref={toolbarRef}
+          className={`fixed bg-gradient-to-br from-purple-400 to-pink-400 backdrop-blur-sm rounded-2xl shadow-2xl p-4 flex flex-col gap-4 transition-all duration-300 cursor-grab active:cursor-grabbing animate-bounce ${toolbarHidden ? 'translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'}`}
+          style={{
+            left: toolbarPos.x > 0 ? `${toolbarPos.x}px` : 'auto',
+            right: toolbarPos.x > 0 ? 'auto' : '1rem',
+            top: toolbarPos.y > 0 ? `${toolbarPos.y}px` : '50%',
+            transform: toolbarPos.y > 0 ? 'none' : 'translateY(-50%)'
+          }}
+          onMouseDown={() => setIsDragging(true)}
+        >
           <div className="flex flex-col items-center gap-2">
             {/* Plant button */}
             <button
