@@ -24,7 +24,6 @@ export default function GardenGame() {
   const [flowerTypes, setFlowerTypes] = useState<FlowerGrid>(
     Array(5).fill(null).map(() => Array(5).fill(null))
   );
-  const [score, setScore] = useState(0);
   const [harvested, setHarvested] = useState(0);
   const [seeds, setSeeds] = useState(3);
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
@@ -173,11 +172,14 @@ export default function GardenGame() {
     oscillator.stop(ctx.currentTime + 0.05);
   };
 
-  const playHarvestConfetti = () => {
+  const playHarvestConfetti = (x?: number, y?: number) => {
     confetti({
       particleCount: 50,
       spread: 70,
-      origin: { y: 0.5 },
+      origin: { 
+        x: x ? x / window.innerWidth : 0.5, 
+        y: y ? y / window.innerHeight : 0.5 
+      },
     } as any);
   };
 
@@ -234,14 +236,17 @@ export default function GardenGame() {
       }
     } else if (activeAction === 'shovel') {
       if (cell === 'flower') {
-        // Shovel harvest - get random seeds (1-3) + play harvest sound
+        // Shovel harvest
         const seedsGained = Math.floor(Math.random() * 3) + 1;
         setSeeds(s => s + seedsGained);
-        setScore(s => s + 1);
         setHarvested(h => h + 1);
         newGrid[row][col] = 'empty';
         playHarvestSound();
-        playHarvestConfetti();
+        if (event) {
+          playHarvestConfetti(event.clientX, event.clientY);
+        } else {
+          playHarvestConfetti();
+        }
       } else if (cell === 'seed' || cell === 'plantSmall' || cell === 'plantBig') {
         // Clear plant - recover seed
         setSeeds(s => s + 1);
@@ -266,14 +271,17 @@ export default function GardenGame() {
       }
     } else if (activeAction === 'harvest') {
       if (cell === 'flower') {
-        // Basket harvest - get random seeds (1-3) + play harvest sound
+        // Basket harvest
         const seedsGained = Math.floor(Math.random() * 3) + 1;
         setSeeds(s => s + seedsGained);
-        setScore(s => s + 1);
         setHarvested(h => h + 1);
         newGrid[row][col] = 'empty';
         playHarvestSound();
-        playHarvestConfetti();
+        if (event) {
+          playHarvestConfetti(event.clientX, event.clientY);
+        } else {
+          playHarvestConfetti();
+        }
       }
     }
 
@@ -356,7 +364,6 @@ export default function GardenGame() {
       if (cell === 'flower') {
         const seedsGained = Math.floor(Math.random() * 3) + 1;
         setSeeds(s => s + seedsGained);
-        setScore(s => s + 1);
         setHarvested(h => h + 1);
         newGrid[selectedCell.row][selectedCell.col] = 'empty';
         playHarvestSound();
@@ -384,7 +391,6 @@ export default function GardenGame() {
       if (cell === 'flower') {
         const seedsGained = Math.floor(Math.random() * 3) + 1;
         setSeeds(s => s + seedsGained);
-        setScore(s => s + 1);
         setHarvested(h => h + 1);
         newGrid[selectedCell.row][selectedCell.col] = 'empty';
         playHarvestSound();
@@ -570,12 +576,12 @@ export default function GardenGame() {
           <h1 className="text-3xl font-bold text-center mb-4 text-green-800">🌻 Little Garden</h1>
           <div className="bg-white rounded-lg shadow-lg p-4 mb-4 flex justify-around">
             <div className="text-center">
-              <p className="text-sm text-gray-600">Score</p>
-              <p className="text-2xl font-bold text-green-700">{score}</p>
+              <p className="text-sm text-gray-600">Level</p>
+              <p className="text-2xl font-bold text-green-700">{Math.floor(harvested / 25) + 1}</p>
             </div>
             <div className="text-center">
               <p className="text-sm text-gray-600">Harvested</p>
-              <p className="text-2xl font-bold text-green-700">{harvested}</p>
+              <p className="text-2xl font-bold text-green-700">{harvested}/25</p>
             </div>
             <div className="text-center">
               <p className="text-sm text-gray-600">Seeds</p>
